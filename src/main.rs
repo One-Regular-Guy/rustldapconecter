@@ -1,4 +1,4 @@
-use std::{env, fmt::Debug, io::{BufRead, BufReader}, sync::Arc};
+use std::{env, fs, sync::Arc};
 
 use axum::{routing::post, Router};
 use ldap3::LdapConnAsync;
@@ -7,13 +7,12 @@ pub mod service;
 pub mod handler;
 pub mod models;
 use openssl::{pkey::PKey, x509::X509};
-use rcgen::{Certificate, CertificateParams, Issuer, KeyPair};
 use service::ldap_service::LdapService;
-
 use crate::handler::setall_handler::handler;
 
 #[tokio::main]
 async fn main() {
+    let _ = dotenv::dotenv();
     tracing_subscriber::fmt()
         .with_env_filter("info,rustapi=debug")
         .init();
@@ -29,18 +28,18 @@ async fn main() {
         Err(_) => "0.0.0.0:3000".to_string(),
     };
 
-    let ldap_uri = match env::var("LDAP_URI") {
+    let ldap_uri = match dotenv::var("LDAP_URI") {
         Ok(uri) => uri,
         Err(_) => "ldap://localhost:389".to_string(),
     };
     
-    let base_dn = match env::var("BASE_DN") {
+    let base_dn = match dotenv::var("BASE_DN") {
         Ok(value) => value,
         Err(_) => "ou=accounts,dc=domain,dc=com".to_string(),
     };
 
-    let ca_cert_pem = env::var("CA_CART").unwrap();
-    let ca_key_pem = env::var("CA_KEY").unwrap();
+    let ca_cert_pem = fs::read("./ca_cert").unwrap();
+    let ca_key_pem = fs::read("./ca_key").unwrap();
     // ========================================================================================
     // ----------------------------------------------------------------------------------------
     // ========================================================================================
@@ -48,10 +47,10 @@ async fn main() {
     // ========================================================================================
     // ----------------------------------------------------------------------------------------
     // ========================================================================================
-    let ca_cert = X509::from_pem(ca_cert_pem.as_bytes())
-        .map_err(|e| format!("Failed to parse CA cert PEM: {}", e))?;
-    let ca_key = PKey::private_key_from_pem(ca_key_pem.as_bytes())
-        .map_err(|e| format!("Failed to parse CA key PEM: {}", e))?; ca_key_pair = KeyPair::from_pem(&ca_key_pem).unwrap();
+    let ca_cert = X509::from_pem(&ca_cert_pem)
+        .map_err(|e| format!("Failed to parse CA cert PEM: {}", e)).unwrap();
+    let ca_key = PKey::private_key_from_pem(&ca_key_pem)
+        .map_err(|e| format!("Failed to parse CA key PEM: {}", e)).unwrap();
     // ========================================================================================
     // ----------------------------------------------------------------------------------------
     // ========================================================================================
@@ -70,7 +69,7 @@ async fn main() {
     // ========================================================================================
     // ----------------------------------------------------------------------------------------
     // ========================================================================================
-    let ldap_service = LdapService::new(ldap, Arc::new(base_dn));
+    let ldap_service = LdapService::new(ldap, Arc::new(base_dn),Arc::new(ca_cert), Arc::new(ca_key));
     
     // ========================================================================================
     // ----------------------------------------------------------------------------------------

@@ -26,3 +26,5 @@ target
 /target
 .env
 .cargo
+ca_cert
+ca_key
